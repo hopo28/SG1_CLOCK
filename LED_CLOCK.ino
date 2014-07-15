@@ -3,6 +3,14 @@
 #include <DS1307RTC.h>  // a basic DS1307 library that returns time as a time_t
 #include "FastLED.h"
 
+
+/* PINOUTS
+RTC SDA - A4
+RTC SCK - A5
+RTC DS  - D2
+RGB LED - D6
+*/
+
 #define NUM_LEDS 60
 #define LED_DATA_PIN 6
 #define LED_BRIGHTNESS 23
@@ -20,7 +28,7 @@ void setup()  {
      Serial.println("Unable to sync with the RTC");
   else
      Serial.println("RTC has set the system time");      
-	 
+
   FastLED.addLeds<NEOPIXEL, LED_DATA_PIN, RGB>(leds, NUM_LEDS);
   LEDS.setBrightness(LED_BRIGHTNESS);
   testLEDStrip();
@@ -55,6 +63,7 @@ void displayClock()
 void printMenu()
 {
   Serial.println(" -- Hopo's LED Clock -- ");
+  digitalClockDisplay();
   Serial.println(" - MENU - ");
   Serial.println(" S = Set time");
   Serial.println(" G = Get time");
@@ -87,7 +96,7 @@ void testLEDStrip()
    {
       leds[whiteLed] = CRGB::White;
       FastLED.show();
-      delay(100);
+      delay(10);
       leds[whiteLed] = CRGB::Black;
    }
 }
@@ -118,11 +127,11 @@ void setTimeMenu()
   Serial.println("Enter Day (DD)");
   timeDatArray[3] = get2DigitFromSerial();
   Serial.println("Enter Hour (hh)");
-  timeDatArray[2] = get2DigitFromSerial();
+  timeDatArray[0] = get2DigitFromSerial();
   Serial.println("Enter Minute (mm)");
   timeDatArray[1] = get2DigitFromSerial();
   Serial.println("Enter Second (ss)");
-  timeDatArray[0] = get2DigitFromSerial();
+  timeDatArray[2] = get2DigitFromSerial();
 
   setTime(timeDatArray[0],
           timeDatArray[1],
