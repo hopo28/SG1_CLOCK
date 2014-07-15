@@ -3,14 +3,6 @@
 #include <DS1307RTC.h>  // a basic DS1307 library that returns time as a time_t
 #include "FastLED.h"
 
-
-/* PINOUTS
-RTC SDA - A4
-RTC SCK - A5
-RTC DS  - D2
-RGB LED - D6
-*/
-
 #define NUM_LEDS 60
 #define LED_DATA_PIN 6
 #define LED_BRIGHTNESS 23
@@ -29,7 +21,7 @@ void setup()  {
   else
      Serial.println("RTC has set the system time");      
 
-  FastLED.addLeds<NEOPIXEL, LED_DATA_PIN, RGB>(leds, NUM_LEDS);
+  FastLED.addLeds<NEOPIXEL, LED_DATA_PIN, GRB>(leds, NUM_LEDS);
   LEDS.setBrightness(LED_BRIGHTNESS);
   testLEDStrip();
   printMenu();
@@ -53,9 +45,32 @@ void displayClock()
   {
     leds[i] = CRGB::Black;
   }
-  leds[hour()]   = CRGB(COLOUR_HOUR[0],COLOUR_HOUR[1],COLOUR_HOUR[2]);
-  leds[minute()] = CRGB(COLOUR_MIN[0],COLOUR_MIN[1],COLOUR_MIN[2]);
-  leds[second()] = CRGB(COLOUR_SEC[0],COLOUR_SEC[1],COLOUR_SEC[2]);
+  
+  
+  leds[hour()-1]   = CRGB(COLOUR_HOUR[0],COLOUR_HOUR[1],COLOUR_HOUR[2]);
+  leds[minute()-1] = CRGB(COLOUR_MIN[0],COLOUR_MIN[1],COLOUR_MIN[2]);
+  leds[second()-1] = CRGB(COLOUR_SEC[0],COLOUR_SEC[1],COLOUR_SEC[2]);
+  
+  if(hour() == minute())
+    leds[hour()-1] = CRGB((COLOUR_HOUR[0] + COLOUR_MIN[0]) / 2,
+                          (COLOUR_HOUR[1] + COLOUR_MIN[1]) / 2,
+                          (COLOUR_HOUR[2] + COLOUR_MIN[2]) / 2);
+  
+  if(second() == minute())  
+    leds[second()-1] = CRGB((COLOUR_SEC[0] + COLOUR_MIN[0]) / 2,
+                            (COLOUR_SEC[1] + COLOUR_MIN[1]) / 2,
+                            (COLOUR_SEC[2] + COLOUR_MIN[2]) / 2);
+  
+  if(second() == hour())
+    leds[second()-1] = CRGB((COLOUR_SEC[0] + COLOUR_HOUR[0]) / 2,
+                            (COLOUR_SEC[1] + COLOUR_HOUR[1]) / 2,
+                            (COLOUR_SEC[2] + COLOUR_HOUR[2]) / 2);
+  
+  if(hour() == minute() == second())
+    leds[second()-1] = CRGB((COLOUR_SEC[0] + COLOUR_HOUR[0] + COLOUR_MIN[0]) / 3,
+                            (COLOUR_SEC[1] + COLOUR_HOUR[1] + COLOUR_MIN[1]) / 3,
+                            (COLOUR_SEC[2] + COLOUR_HOUR[2] + COLOUR_MIN[2]) / 3);
+  
   FastLED.show();
 }
 
