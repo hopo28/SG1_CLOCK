@@ -1,23 +1,30 @@
 #include <Time.h>  
 #include <TimeAlarms.h>
 #include <Wire.h>  
-#include <DS1307RTC.h>  // a basic DS1307 library that returns time as a time_t
+#include <DS1307RTC.h>
+#include <EEPROM.h>
 #include "FastLED.h"
 
 #define NUM_LEDS 60
 #define LED_DATA_PIN 6
-#define LED_BRIGHTNESS 23
-#define ALARM_BRIGHTNESS 5//change this to something sensible
+#define LED_BRIGHTNESS 25
+#define ALARM_BRIGHTNESS 255
 CRGB leds[NUM_LEDS];
+
+unsigned long timerSec = 0;
+int currentSec = 0;
 
 //default colours
 byte COLOUR_SEC[3]  = {000,000,255};//BLUE
 byte COLOUR_MIN[3]  = {000,255,000};//GREEN
 byte COLOUR_HOUR[3] = {255,000,000};//RED
 
+//versions for serial.print
 int alarmHour = 0;
 int alarmMin = 0;
 int alarmSec = 0;
+
+int LEDBrightness = LED_BRIGHTNESS;
 
 void setup()  {
   Serial.begin(9600);
@@ -28,10 +35,10 @@ void setup()  {
      Serial.println("RTC has set the system time");      
 
   FastLED.addLeds<NEOPIXEL, LED_DATA_PIN, GRB>(leds, NUM_LEDS);
-  LEDS.setBrightness(LED_BRIGHTNESS);
+  LEDS.setBrightness(LEDBrightness);
   testLEDStrip();
+  retriveAlarm();
   printMenu();
-   
 }
 
 void loop()
@@ -41,7 +48,7 @@ void loop()
     doMenu(Serial.read());
   }
   displayClock();
-  Alarm.delay(100);//to allow alarm to trigger
+  Alarm.delay(10);//to allow alarm to trigger
 }
 
 
@@ -50,25 +57,39 @@ void displayClock()
   //do LED clock output
   for(int i = 0; i < NUM_LEDS; i++)//blank it first
   {
-    leds[i] = CRGB::Black;
+    leds[i] = CRGB::Black;//but dont show yet
   }
   int myHour = hour()*5;
   
+  if (hour() >= 12)//make sure it works in the afternoon
+    myHour = (hour() - 12) * 5;
+  
   leds[myHour]   = CRGB(COLOUR_HOUR[0],COLOUR_HOUR[1],COLOUR_HOUR[2]);
   leds[minute()] = CRGB(COLOUR_MIN[0],COLOUR_MIN[1],COLOUR_MIN[2]);
-  leds[second()] = CRGB(COLOUR_SEC[0],COLOUR_SEC[1],COLOUR_SEC[2]);
+  leds[second()] = CRGB(COLOUR_SEC[0],COLOUR_SEC[1],COLOUR_SEC[2]);//work out how to do smooth transitions
   
+  //smooth transition (overrides previuos second)  
+  if((second() > currentSec) || (second() == 0))//if it has incrmented or reset
+  {
+    timerSec = millis();//log when it happened
+    currentSec = second();
+  }
+
+  float proportion = 0.0;//this will be between 0 and 1 for brightness based on how far through the second we are
+  proportion = (float)(millis()-timerSec);
+  proportion = proportion / 1000.0;
+  leds[second()] = CRGB(COLOUR_SEC[0]*proportion,COLOUR_SEC[1]*proportion,COLOUR_SEC[2]*proportion);
+  leds[second()-1] = CRGB(COLOUR_SEC[0]*(1-proportion),COLOUR_SEC[1]*(1-proportion),COLOUR_SEC[2]*(1-proportion));//the previous one
+
   if(myHour == minute())
     leds[minute()] = CRGB((COLOUR_HOUR[0] + COLOUR_MIN[0]) / 2,
                           (COLOUR_HOUR[1] + COLOUR_MIN[1]) / 2,
                           (COLOUR_HOUR[2] + COLOUR_MIN[2]) / 2);
   
   if(second() == minute())
-{
     leds[second()] = CRGB((COLOUR_SEC[0] + COLOUR_MIN[0]) / 2,
                           (COLOUR_SEC[1] + COLOUR_MIN[1]) / 2,
                           (COLOUR_SEC[2] + COLOUR_MIN[2]) / 2);
-}
   
   if(second() == myHour)
     leds[second()] = CRGB((COLOUR_SEC[0] + COLOUR_HOUR[0]) / 2,
@@ -89,11 +110,13 @@ void printMenu()
   Serial.println(" -- Hopo's LED Clock -- ");
   digitalClockDisplay();
   digitalAlarmDisplay();
+  Serial.print(" Brightness: ");
+  Serial.println(LEDBrightness);
   Serial.println(" - MENU - ");
-  Serial.println(" S = Set time");
-  Serial.println(" G = Get time");
+  Serial.println(" G = Get Settings");
+  Serial.println(" S = Set Time");
   Serial.println(" A = Set Alarm");
-  Serial.println(" D = Display Alarm");
+  Serial.println(" B = Set Brightness");
 }
 
 void doMenu(char selection)
@@ -102,6 +125,9 @@ void doMenu(char selection)
   {
     case 'G'://print time out
 	  digitalClockDisplay();
+	  digitalAlarmDisplay();
+          Serial.print(" Brightness: ");
+          Serial.println(LEDBrightness);
 	  break;
     case 'S'://set time menu
 	  setTimeMenu();
@@ -111,8 +137,9 @@ void doMenu(char selection)
 	  setAlarmMenu();
           printMenu();
 	  break;
-    case 'D'://show current alarm
-	  digitalAlarmDisplay();
+    case 'B'://set brightness menu
+	  setBrightnessMenu();
+          printMenu();
 	  break;
     default:
 	  Serial.println("Unknown command");
@@ -151,7 +178,7 @@ void TheAlarm()
     showAllColour(CRGB::Black);
     delay(100);
   }
-  LEDS.setBrightness(LED_BRIGHTNESS);//reset brightness
+  LEDS.setBrightness(LEDBrightness);//reset brightness
 }
 
 int get2DigitFromSerial()
@@ -159,13 +186,47 @@ int get2DigitFromSerial()
   int retVal = 0;
   while (!(Serial.available() > 0));
   {
-    retVal = (10 * (Serial.read() - '0'));
+    retVal += (10 * (Serial.read() - '0'));
   }
   while (!(Serial.available() > 0));
   {
     retVal += (Serial.read() - '0');
   }
   return retVal;
+}
+
+int get3DigitFromSerial()
+{
+  int retVal = 0;
+  while (!(Serial.available() > 0));
+  {
+    retVal += (100 * (Serial.read() - '0'));
+  }
+  while (!(Serial.available() > 0));
+  {
+    retVal += (10 * (Serial.read() - '0'));
+  }
+  while (!(Serial.available() > 0));
+  {
+    retVal += (Serial.read() - '0');
+  }
+  return retVal;
+}
+
+void saveAlarm()
+{
+  EEPROM.write(0, alarmHour);
+  EEPROM.write(1, alarmMin);
+  EEPROM.write(2, alarmSec);
+  Alarm.alarmRepeat(alarmHour,alarmMin,alarmSec, TheAlarm);
+}
+
+void retriveAlarm()
+{
+  alarmHour = EEPROM.read(0);
+  alarmMin = EEPROM.read(1);
+  alarmSec = EEPROM.read(2);
+  Alarm.alarmRepeat(alarmHour,alarmMin,alarmSec, TheAlarm);
 }
 
 void setTimeMenu()
@@ -192,7 +253,6 @@ void setTimeMenu()
           timeDatArray[4],
           timeDatArray[5]);
 
-  //setTime(9,30,50,13,1,2012);
   time_t t = now();
   RTC.set(t);  
 }
@@ -205,13 +265,20 @@ void setAlarmMenu()
   alarmMin = get2DigitFromSerial();
   Serial.println("Enter Alarm Second (ss)");
   alarmSec = get2DigitFromSerial();
-  Alarm.alarmRepeat(alarmHour,alarmMin,alarmSec, TheAlarm);
+  saveAlarm();
+}
+
+void setBrightnessMenu()
+{
+  Serial.println("Enter Brightness (000-255)");
+  LEDBrightness = get3DigitFromSerial();
+  LEDS.setBrightness(LEDBrightness);
 }
 
 void digitalClockDisplay()
 {
   // digital clock display of the time
-  Serial.print(" Time: ");
+  Serial.print(" Time:  ");
   Serial.print(hour());
   printDigits(minute());
   printDigits(second());
