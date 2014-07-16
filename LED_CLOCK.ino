@@ -1,4 +1,5 @@
 #include <Time.h>  
+#include <TimeAlarms.h>
 #include <Wire.h>  
 #include <DS1307RTC.h>  // a basic DS1307 library that returns time as a time_t
 #include "FastLED.h"
@@ -6,12 +7,17 @@
 #define NUM_LEDS 60
 #define LED_DATA_PIN 6
 #define LED_BRIGHTNESS 23
+#define ALARM_BRIGHTNESS 5//change this to something sensible
 CRGB leds[NUM_LEDS];
 
 //default colours
 byte COLOUR_SEC[3]  = {000,000,255};//BLUE
 byte COLOUR_MIN[3]  = {000,255,000};//GREEN
 byte COLOUR_HOUR[3] = {255,000,000};//RED
+
+int alarmHour = 0;
+int alarmMin = 0;
+int alarmSec = 0;
 
 void setup()  {
   Serial.begin(9600);
@@ -35,6 +41,7 @@ void loop()
     doMenu(Serial.read());
   }
   displayClock();
+  Alarm.delay(100);//to allow alarm to trigger
 }
 
 
@@ -45,31 +52,33 @@ void displayClock()
   {
     leds[i] = CRGB::Black;
   }
+  int myHour = hour()*5;
   
+  leds[myHour]   = CRGB(COLOUR_HOUR[0],COLOUR_HOUR[1],COLOUR_HOUR[2]);
+  leds[minute()] = CRGB(COLOUR_MIN[0],COLOUR_MIN[1],COLOUR_MIN[2]);
+  leds[second()] = CRGB(COLOUR_SEC[0],COLOUR_SEC[1],COLOUR_SEC[2]);
   
-  leds[hour()-1]   = CRGB(COLOUR_HOUR[0],COLOUR_HOUR[1],COLOUR_HOUR[2]);
-  leds[minute()-1] = CRGB(COLOUR_MIN[0],COLOUR_MIN[1],COLOUR_MIN[2]);
-  leds[second()-1] = CRGB(COLOUR_SEC[0],COLOUR_SEC[1],COLOUR_SEC[2]);
-  
-  if(hour() == minute())
-    leds[hour()-1] = CRGB((COLOUR_HOUR[0] + COLOUR_MIN[0]) / 2,
+  if(myHour == minute())
+    leds[minute()] = CRGB((COLOUR_HOUR[0] + COLOUR_MIN[0]) / 2,
                           (COLOUR_HOUR[1] + COLOUR_MIN[1]) / 2,
                           (COLOUR_HOUR[2] + COLOUR_MIN[2]) / 2);
   
-  if(second() == minute())  
-    leds[second()-1] = CRGB((COLOUR_SEC[0] + COLOUR_MIN[0]) / 2,
-                            (COLOUR_SEC[1] + COLOUR_MIN[1]) / 2,
-                            (COLOUR_SEC[2] + COLOUR_MIN[2]) / 2);
+  if(second() == minute())
+{
+    leds[second()] = CRGB((COLOUR_SEC[0] + COLOUR_MIN[0]) / 2,
+                          (COLOUR_SEC[1] + COLOUR_MIN[1]) / 2,
+                          (COLOUR_SEC[2] + COLOUR_MIN[2]) / 2);
+}
   
-  if(second() == hour())
-    leds[second()-1] = CRGB((COLOUR_SEC[0] + COLOUR_HOUR[0]) / 2,
-                            (COLOUR_SEC[1] + COLOUR_HOUR[1]) / 2,
-                            (COLOUR_SEC[2] + COLOUR_HOUR[2]) / 2);
+  if(second() == myHour)
+    leds[second()] = CRGB((COLOUR_SEC[0] + COLOUR_HOUR[0]) / 2,
+                          (COLOUR_SEC[1] + COLOUR_HOUR[1]) / 2,
+                          (COLOUR_SEC[2] + COLOUR_HOUR[2]) / 2);
   
-  if(hour() == minute() == second())
-    leds[second()-1] = CRGB((COLOUR_SEC[0] + COLOUR_HOUR[0] + COLOUR_MIN[0]) / 3,
-                            (COLOUR_SEC[1] + COLOUR_HOUR[1] + COLOUR_MIN[1]) / 3,
-                            (COLOUR_SEC[2] + COLOUR_HOUR[2] + COLOUR_MIN[2]) / 3);
+  if(myHour == minute() == second())
+    leds[second()] = CRGB((COLOUR_SEC[0] + COLOUR_HOUR[0] + COLOUR_MIN[0]) / 3,
+                          (COLOUR_SEC[1] + COLOUR_HOUR[1] + COLOUR_MIN[1]) / 3,
+                          (COLOUR_SEC[2] + COLOUR_HOUR[2] + COLOUR_MIN[2]) / 3);
   
   FastLED.show();
 }
@@ -79,30 +88,36 @@ void printMenu()
 {
   Serial.println(" -- Hopo's LED Clock -- ");
   digitalClockDisplay();
+  digitalAlarmDisplay();
   Serial.println(" - MENU - ");
   Serial.println(" S = Set time");
   Serial.println(" G = Get time");
-  //Serial.println();
-  //Serial.println();
+  Serial.println(" A = Set Alarm");
+  Serial.println(" D = Display Alarm");
 }
 
 void doMenu(char selection)
 {
   switch(selection)
   {
-    case 'G':
-	  //print time out
+    case 'G'://print time out
 	  digitalClockDisplay();
 	  break;
-	case 'S':
-	  //set time menu
+    case 'S'://set time menu
 	  setTimeMenu();
+          printMenu();
 	  break;
-	default:
+    case 'A'://set alarm menu
+	  setAlarmMenu();
+          printMenu();
+	  break;
+    case 'D'://show current alarm
+	  digitalAlarmDisplay();
+	  break;
+    default:
 	  Serial.println("Unknown command");
 	  break;
   }
-  printMenu();
 }
 
 void testLEDStrip()
@@ -116,6 +131,28 @@ void testLEDStrip()
    }
 }
 
+void showAllColour(CRGB colour)
+{
+  for(int i = 0; i < NUM_LEDS; i++)
+  {
+    leds[i] = colour;
+  }
+  FastLED.show();
+}
+
+void TheAlarm()
+{
+  Serial.println("ALARM!");
+  LEDS.setBrightness(ALARM_BRIGHTNESS);//full bright
+  for(int i = 0; i < 10; i++)
+  {
+    showAllColour(CRGB::White);
+    delay(100);
+    showAllColour(CRGB::Black);
+    delay(100);
+  }
+  LEDS.setBrightness(LED_BRIGHTNESS);//reset brightness
+}
 
 int get2DigitFromSerial()
 {
@@ -157,12 +194,24 @@ void setTimeMenu()
 
   //setTime(9,30,50,13,1,2012);
   time_t t = now();
-  RTC.set(t);
-  digitalClockDisplay();  
+  RTC.set(t);  
 }
 
-void digitalClockDisplay(){
+void setAlarmMenu()
+{
+  Serial.println("Enter Alarm Hour (hh)");
+  alarmHour = get2DigitFromSerial();
+  Serial.println("Enter Alarm Minute (mm)");
+  alarmMin = get2DigitFromSerial();
+  Serial.println("Enter Alarm Second (ss)");
+  alarmSec = get2DigitFromSerial();
+  Alarm.alarmRepeat(alarmHour,alarmMin,alarmSec, TheAlarm);
+}
+
+void digitalClockDisplay()
+{
   // digital clock display of the time
+  Serial.print(" Time: ");
   Serial.print(hour());
   printDigits(minute());
   printDigits(second());
@@ -173,6 +222,15 @@ void digitalClockDisplay(){
   Serial.print(" ");
   Serial.print(year()); 
   Serial.println(); 
+}
+
+void digitalAlarmDisplay()
+{
+  Serial.print(" Alarm: ");
+  Serial.print(alarmHour);
+  printDigits(alarmMin);
+  printDigits(alarmSec);
+  Serial.println(" Daily");
 }
 
 void printDigits(int digits){
