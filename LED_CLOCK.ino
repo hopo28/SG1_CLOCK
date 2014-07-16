@@ -26,7 +26,8 @@ int alarmSec = 0;
 
 int LEDBrightness = LED_BRIGHTNESS;
 
-void setup()  {
+void setup()
+{
   Serial.begin(9600);
   setSyncProvider(RTC.get);   // the function to get the time from the RTC
   if(timeStatus()!= timeSet) 
@@ -64,43 +65,53 @@ void displayClock()
   if (hour() >= 12)//make sure it works in the afternoon
     myHour = (hour() - 12) * 5;
   
+  int lastSecond;
+  if(second() == 0)
+    lastSecond = 59;
+  else
+    lastSecond = second()-1;
+  
   leds[myHour]   = CRGB(COLOUR_HOUR[0],COLOUR_HOUR[1],COLOUR_HOUR[2]);
   leds[minute()] = CRGB(COLOUR_MIN[0],COLOUR_MIN[1],COLOUR_MIN[2]);
-  leds[second()] = CRGB(COLOUR_SEC[0],COLOUR_SEC[1],COLOUR_SEC[2]);//work out how to do smooth transitions
+  //leds[second()] = CRGB(COLOUR_SEC[0],COLOUR_SEC[1],COLOUR_SEC[2]);//this has been replaced by smooth transitions
   
-  //smooth transition (overrides previuos second)  
-  if((second() > currentSec) || (second() == 0))//if it has incrmented or reset
+  if((second() > currentSec) || ((second() == 0) && (currentSec == 59)))//if it has incrmented or reset
   {
     timerSec = millis();//log when it happened
     currentSec = second();
+//    Serial.println(currentSec);//DEBUG
   }
 
-  float proportion = 0.0;//this will be between 0 and 1 for brightness based on how far through the second we are
-  proportion = (float)(millis()-timerSec);
-  proportion = proportion / 1000.0;
-  leds[second()] = CRGB(COLOUR_SEC[0]*proportion,COLOUR_SEC[1]*proportion,COLOUR_SEC[2]*proportion);
-  leds[second()-1] = CRGB(COLOUR_SEC[0]*(1-proportion),COLOUR_SEC[1]*(1-proportion),COLOUR_SEC[2]*(1-proportion));//the previous one
+  float prop = 0.0;//proportion will be between 0 and 1 for balance based on how far through the second we are
+  prop = (float)(millis()-timerSec);
+  prop = prop / 1000.0;
+  float iprop = 1-prop;
+    
+  //smooth seconds
+  leds[second()] = CRGB(COLOUR_SEC[0]*prop,COLOUR_SEC[1]*prop,COLOUR_SEC[2]*prop);                      
+  leds[lastSecond] = CRGB(COLOUR_SEC[0]*iprop,COLOUR_SEC[1]*iprop,COLOUR_SEC[2]*iprop);//the previous one
 
   if(myHour == minute())
-    leds[minute()] = CRGB((COLOUR_HOUR[0] + COLOUR_MIN[0]) / 2,
-                          (COLOUR_HOUR[1] + COLOUR_MIN[1]) / 2,
-                          (COLOUR_HOUR[2] + COLOUR_MIN[2]) / 2);
+    leds[minute()] = CRGB((COLOUR_HOUR[0] + COLOUR_MIN[0]) / 2,(COLOUR_HOUR[1] + COLOUR_MIN[1]) / 2,(COLOUR_HOUR[2] + COLOUR_MIN[2]) / 2);
   
   if(second() == minute())
-    leds[second()] = CRGB((COLOUR_SEC[0] + COLOUR_MIN[0]) / 2,
-                          (COLOUR_SEC[1] + COLOUR_MIN[1]) / 2,
-                          (COLOUR_SEC[2] + COLOUR_MIN[2]) / 2);
-  
+    leds[second()] = CRGB((COLOUR_SEC[0]*prop) + (COLOUR_MIN[0]*iprop),(COLOUR_SEC[1]*prop) + (COLOUR_MIN[1]*iprop),(COLOUR_SEC[2]*prop) + (COLOUR_MIN[2]*iprop));
+                            
+  if(lastSecond == minute())
+    leds[lastSecond] = CRGB((COLOUR_SEC[0]*iprop) + (COLOUR_MIN[0]*prop),(COLOUR_SEC[1]*iprop) + (COLOUR_MIN[1]*prop),(COLOUR_SEC[2]*iprop) + (COLOUR_MIN[2]*prop));                      
+                          
   if(second() == myHour)
-    leds[second()] = CRGB((COLOUR_SEC[0] + COLOUR_HOUR[0]) / 2,
-                          (COLOUR_SEC[1] + COLOUR_HOUR[1]) / 2,
-                          (COLOUR_SEC[2] + COLOUR_HOUR[2]) / 2);
+    leds[second()] = CRGB((COLOUR_SEC[0]*prop) + (COLOUR_HOUR[0]*iprop),(COLOUR_SEC[1]*prop) + (COLOUR_HOUR[1]*iprop),(COLOUR_SEC[2]*prop) + (COLOUR_HOUR[2]*iprop));
+  
+  if(lastSecond == myHour)
+    leds[lastSecond] = CRGB((COLOUR_SEC[0]*iprop) + (COLOUR_HOUR[0]*prop),(COLOUR_SEC[1]*iprop) + (COLOUR_HOUR[1]*prop),(COLOUR_SEC[2]*iprop) + (COLOUR_HOUR[2]*prop));
   
   if(myHour == minute() == second())
-    leds[second()] = CRGB((COLOUR_SEC[0] + COLOUR_HOUR[0] + COLOUR_MIN[0]) / 3,
-                          (COLOUR_SEC[1] + COLOUR_HOUR[1] + COLOUR_MIN[1]) / 3,
-                          (COLOUR_SEC[2] + COLOUR_HOUR[2] + COLOUR_MIN[2]) / 3);
+    leds[second()] = CRGB((COLOUR_SEC[0]*prop) + (((COLOUR_HOUR[0] + COLOUR_MIN[0])/2)*iprop),(COLOUR_SEC[1]*prop) + (((COLOUR_HOUR[1] + COLOUR_MIN[1])/2)*iprop),(COLOUR_SEC[2]*prop) + (((COLOUR_HOUR[2] + COLOUR_MIN[2])/2)*iprop));
   
+  if(myHour == minute() == lastSecond)
+    leds[lastSecond] = CRGB((COLOUR_SEC[0]*iprop) + (((COLOUR_HOUR[0] + COLOUR_MIN[0])/2)*prop),(COLOUR_SEC[1]*iprop) + (((COLOUR_HOUR[1] + COLOUR_MIN[1])/2)*prop),(COLOUR_SEC[2]*iprop) + (((COLOUR_HOUR[2] + COLOUR_MIN[2])/2)*prop));
+ 
   FastLED.show();
 }
 
@@ -114,7 +125,7 @@ void printMenu()
   Serial.println(LEDBrightness);
   Serial.println(" - MENU - ");
   Serial.println(" G = Get Settings");
-  Serial.println(" S = Set Time");
+  Serial.println(" S = Set Date/Time");
   Serial.println(" A = Set Alarm");
   Serial.println(" B = Set Brightness");
 }
@@ -307,3 +318,4 @@ void printDigits(int digits){
     Serial.print('0');
   Serial.print(digits);
 }
+
