@@ -1,13 +1,9 @@
 /*
-ONLY 3 BUTTONS - colour, min adv and hour adv
-then a switch for manual/auto bright
-and a pot for manual bright
 
-dial in doesnt work properly, it dials last chevron
+Known bugs:
+sometimes inverts seconds fade after dial sequence, resets itself after getting to 60 though
 
-NEED:
-3 pushies
-one switchy
+
 */
 
 #include <Time.h>  
@@ -38,7 +34,7 @@ byte COLOUR_SEC[3]  = {064,000,255};//BLUE
 byte COLOUR_DOTS[3] = {30,30,30};//dim white
 byte COLOUR_BG[3] = {0,0,0};//black
 
-byte COLOUR_CHEVRON[3] = {255,182,000};//orangish
+byte COLOUR_CHEVRON[3] = {255,142,000};//orangish
 byte COLOUR_WORMHOLE[3] = {63,128,255};//blueish
 
 int colourSet = 0;//default colour set to use
@@ -48,7 +44,7 @@ unsigned long buttonPressedTimer = 0;
 int buttonPressed = 200;
 boolean buttonPressedFlag = false;
 byte buttonPressedOrigValue = 0;
-int buttons[NUM_BUTTONS] = {4,5,6};//temp for testing  -  -  -  -  -  -  -  -  CHANGE THESE  -  -  -  -  
+int buttons[NUM_BUTTONS] = {4,5,6};
 
 //struct colour
 typedef struct
@@ -73,7 +69,9 @@ colourProfile myColourProfiles[NUM_COLOURSETS];
 void setup()
 {
   Serial.begin(9600);
-  setSyncProvider(RTC.get);   // the function to get the time from the RTC
+  setSyncProvider(RTC.get);   // the function to get the time from the RTC, gets time now
+  setSyncInterval(3600);  //default is 300 secs (5 mins), set to 1 hour
+  
   if(timeStatus()!= timeSet) 
      Serial.println("Unable to sync with the RTC");
   else
@@ -233,9 +231,10 @@ void checkLight()
 void checkChime()
 {
   int sequence = random(0,6);
-//                                                  sequence = 1;//TESTINGS
   if (minute() == 0 && second() == 0)
   {
+    now();//gets time now, forces resync
+    setSyncInterval(3600);//set sync time to every hour, eg every chime
     switch(sequence)
     {
       case 1: dial(); dialFailSparks(); break;
